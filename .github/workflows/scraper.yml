@@ -2,7 +2,7 @@ name: Daily Selenium Scraper
 
 on:
   schedule:
-    - cron: "30 1 * * *"   # Runs daily at 07:00 AM IST (1:30 UTC)
+    - cron: "30 1 * * *"   # Runs daily at 07:00 AM IST (01:30 UTC)
   workflow_dispatch:        # Allows manual run from Actions tab
 
 jobs:
@@ -10,23 +10,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ✅ Step 1: Checkout your repo
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # ✅ Step 2: Setup Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # ✅ Step 3: Install Python dependencies + Chrome for Selenium
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
 
+      # ✅ Step 4: Create Google Sheets credentials file
       - name: Create Google credentials file
         run: |
           echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
+      # ✅ Step 5: Run the Selenium scraper
       - name: Run scraper
-        run: python attendence_V4.py
+        run: python attendance_v4.py
+
+      # ✅ Step 6: Send email notification (always runs, even on failure)
+      - name: Send email notification
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "✅ Selenium Scraper Finished (Status: ${{ job.status }})"
+          to: your-email@gmail.com
+          from: GitHub Actions <your-email@gmail.com>
+          body: |
+            Hello!
+
+            The Selenium scraper has finished running.
+
+            ✅ **Status:** ${{ job.status }}
+            ⏰ **Time:** ${{ github.run_started_at }}
+
+            📄 **Attendance Sheet:**  
+            https://docs.google.com/spreadsheets/d/13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY/edit?gid=728086314#gid=728086314
+
+            🔗 **Run Logs:**  
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
