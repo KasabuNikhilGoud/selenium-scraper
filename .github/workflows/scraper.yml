@@ -34,7 +34,7 @@ jobs:
 
       # ✅ Step 5: Run the Selenium scraper
       - name: Run scraper
-        run: python attendence_v4.py
+        run: python attendence_V4.py
 
       # ✅ Step 6: Send email notification (always runs, even on failure)
       - name: Send email notification
