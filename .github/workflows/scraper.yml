@@ -29,4 +29,4 @@ jobs:
           echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
       - name: Run scraper
-        run: python attendance_V4.py
+        run: python attendence_V4.py
