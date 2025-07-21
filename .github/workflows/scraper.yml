@@ -42,13 +42,13 @@ jobs:
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
-          server_port: 587
+          server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
           subject: "✅ Selenium Scraper Finished (Status: ${{ job.status }})"
           to: kasabunikil@gmail.com
-          from: GitHub Actions <your-email@gmail.com>
-          content_type: text/html   # ✅ VERY IMPORTANT
+          from: "GitHub Actions Bot <${{ secrets.MAIL_USERNAME }}>"
+          content_type: text/html      # ✅ Force HTML format
           body: |
             <!DOCTYPE html>
             <html lang="en">
