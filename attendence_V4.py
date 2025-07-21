@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gspread
 import time
 from datetime import datetime
+import pytz  # ✅ For Indian timezone
 
 # === CONFIG ===
 SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
@@ -84,12 +85,17 @@ def process_roll(roll):
 # === Create new column ONCE before starting ===
 def prepare_new_column(all_rows):
     col_position = 3  # after Name
-    current_datetime = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-    sheet.insert_cols([[]], col_position)           # insert empty col
-    sheet.update_cell(10, col_position, current_datetime)  # header at row 10
-    print(f"📅 Created new column: {current_datetime}")
+    
+    # ✅ Get current IST time instead of UTC
+    ist = pytz.timezone("Asia/Kolkata")
+    current_datetime = datetime.now(ist).strftime("%Y-%m-%d %I:%M %p")  # Example: 2025-07-17 08:45 AM
+    
+    # ✅ Insert a new column & add IST timestamp as header
+    sheet.insert_cols([[]], col_position)
+    sheet.update_cell(10, col_position, current_datetime)
+    print(f"📅 Created new column (IST): {current_datetime}")
 
-    # Create roll -> row mapping for quick lookup
+    # Create roll → row mapping for quick lookup
     roll_to_row = {}
     for idx, row in enumerate(all_rows[10:], start=11):
         if len(row) >= 1 and row[0].strip():
@@ -112,7 +118,7 @@ def run_parallel_scraping():
     rolls, all_rows = get_rolls_from_sheet()
     print(f"📋 Found {len(rolls)} rolls from sheet")
 
-    # Create column + mapping once
+    # ✅ Create column with IST time
     col_position, roll_to_row = prepare_new_column(all_rows)
 
     batch_size = MAX_THREADS
