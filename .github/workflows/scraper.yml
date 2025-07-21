@@ -96,7 +96,7 @@ jobs:
                       <div class="buttons">
                           <a href="https://docs.google.com/spreadsheets/d/13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY/edit?gid=728086314#gid=728086314" class="btn btn-blue">📖 Open Sheet</a><br>
                           <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" class="btn btn-red">📜 View Logs</a><br>
-                          <a href="${{ github.server_url }}/${{ github.repository }}/actions" class="btn btn-gray">🔄 Retry Workflow</a>
+                          <a href="${{ github.server_url }}/${{ github.repository }}/actions/workflows/scraper.yml?browser=1" class="btn btn-gray">🔄 Retry Workflow</a>
                       </div>
 
                       <p>Keep track easily! 🚀</p>
