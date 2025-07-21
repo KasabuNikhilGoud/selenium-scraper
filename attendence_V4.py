@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import gspread
 import time
 from datetime import datetime
-import pytz  # ✅ For Indian timezone
+from zoneinfo import ZoneInfo  # ✅ Built-in timezone support (Python 3.9+)
 
 # === CONFIG ===
 SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
@@ -86,11 +86,11 @@ def process_roll(roll):
 def prepare_new_column(all_rows):
     col_position = 3  # after Name
     
-    # ✅ Get current IST time instead of UTC
-    ist = pytz.timezone("Asia/Kolkata")
-    current_datetime = datetime.now(ist).strftime("%Y-%m-%d %I:%M %p")  # Example: 2025-07-17 08:45 AM
+    # ✅ Get IST time using built-in zoneinfo (no pytz needed)
+    ist_time = datetime.now(ZoneInfo("Asia/Kolkata"))
+    current_datetime = ist_time.strftime("%Y-%m-%d %I:%M %p")  # Example: 2025-07-17 08:45 AM
     
-    # ✅ Insert a new column & add IST timestamp as header
+    # ✅ Insert new column and add timestamp as header
     sheet.insert_cols([[]], col_position)
     sheet.update_cell(10, col_position, current_datetime)
     print(f"📅 Created new column (IST): {current_datetime}")
@@ -118,7 +118,7 @@ def run_parallel_scraping():
     rolls, all_rows = get_rolls_from_sheet()
     print(f"📋 Found {len(rolls)} rolls from sheet")
 
-    # ✅ Create column with IST time
+    # Create column + mapping once
     col_position, roll_to_row = prepare_new_column(all_rows)
 
     batch_size = MAX_THREADS
