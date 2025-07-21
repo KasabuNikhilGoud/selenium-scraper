@@ -1,0 +1,32 @@
+name: Daily Selenium Scraper
+
+on:
+  schedule:
+    - cron: "30 1 * * *"   # Runs daily at 07:00 AM IST (1:30 UTC)
+  workflow_dispatch:        # Allows manual run from Actions tab
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-chromedriver
+
+      - name: Create Google credentials file
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
+
+      - name: Run scraper
+        run: python attendance.V4.py
