@@ -4,6 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from oauth2client.service_account import ServiceAccountCredentials
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from shutil import which
 import gspread
 import time
 from datetime import datetime
@@ -13,7 +14,7 @@ from zoneinfo import ZoneInfo
 SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
 MAX_ATTEMPTS = 3
 MAX_THREADS = 5
-BASE_PREFIX = "217Z1A05"  # Fixed prefix
+BASE_PREFIX = "237Z1A05"  # ✅ Correct prefix
 
 # === Google Sheets Setup ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -21,17 +22,24 @@ creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", sco
 client = gspread.authorize(creds)
 sheet = client.open_by_key(SHEET_ID).sheet1
 
-# === Chrome Options ===
+# === Setup Chrome Options ===
 chrome_options = webdriver.ChromeOptions()
-chrome_options.add_argument('--headless=new')
-chrome_options.add_argument('--disable-gpu')
-chrome_options.add_argument('--no-sandbox')
-chrome_options.add_argument('--disable-dev-shm-usage')
-chrome_options.add_argument('--disable-notifications')
-chrome_options.add_argument('--log-level=3')
-chrome_options.add_argument('--window-size=1280,800')
+chrome_options.add_argument("--headless=new")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--disable-notifications")
+chrome_options.add_argument("--log-level=3")
+chrome_options.add_argument("--window-size=1280,800")
 
-# === Generate Roll Numbers (72 → 99, A1 → D9) ===
+# ✅ Detect chromium-browser path for GitHub Actions
+chrome_path = which("chromium-browser")
+if chrome_path:
+    print(f"✅ Found Chromium at: {chrome_path}")
+    chrome_options.binary_location = chrome_path
+else:
+    print("⚠️ Chromium not found, will use default Chrome")
+
+# === Generate Roll Numbers (72→99, A1→D9) ===
 def generate_roll_numbers():
     rolls = []
 
