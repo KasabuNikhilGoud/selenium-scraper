@@ -22,10 +22,13 @@ jobs:
 
       # ✅ Step 3: Install dependencies
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser chromium-chromedriver
+  run: |
+    pip install -r requirements.txt
+    sudo apt-get update
+    sudo apt-get install -y chromium-browser chromium-chromedriver
+    which chromium-browser
+    which chromedriver
+
 
       # ✅ Step 4: Create Google Sheets credentials
       - name: Create Google credentials file
