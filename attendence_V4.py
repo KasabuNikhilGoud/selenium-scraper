@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
 MAX_ATTEMPTS = 3
 MAX_THREADS = 5
-BASE_PREFIX = "237Z1A05"  # ✅ Correct prefix
+BASE_PREFIX = "217Z1A05"  # ✅ Correct prefix
 
 # === Google Sheets Setup ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
