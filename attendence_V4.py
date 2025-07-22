@@ -91,17 +91,31 @@ def process_roll(roll):
     print(f"❌ Max attempts failed: {roll}")
     return (roll, "")
 
-# === Prepare Column Header ===
+# === Prepare Column Header & Auto-expand columns ===
 def prepare_new_column():
     ist_time = datetime.now(ZoneInfo("Asia/Kolkata"))
     current_datetime = ist_time.strftime("%Y-%m-%d %I:%M %p")
-    headers = sheet.row_values(10)  # Row 10 is header row
-    col_position = len(headers) + 1  # Next empty column
+
+    # ✅ Get sheet size
+    rows = sheet.row_count
+    cols = sheet.col_count
+
+    # ✅ Find next available column after header row
+    headers = sheet.row_values(10)  # Row 10 is header
+    col_position = len(headers) + 1
+
+    # ✅ Expand sheet if not enough columns
+    if col_position > cols:
+        needed = col_position - cols
+        sheet.add_cols(needed)
+        print(f"➕ Added {needed} extra column(s), total now: {cols + needed}")
+
+    # ✅ Finally write timestamp header
     sheet.update_cell(10, col_position, current_datetime)
-    print(f"📅 Created new column: {current_datetime}")
+    print(f"📅 Created new column at col {col_position}: {current_datetime}")
     return col_position
 
-# === Get current Sheet data for lookup ===
+# === Get existing rolls from sheet for quick lookup ===
 def get_existing_rolls():
     all_rows = sheet.get_all_values()
     roll_map = {}  # roll → row number
@@ -110,29 +124,41 @@ def get_existing_rolls():
             roll_map[row[0].strip()] = idx
     return roll_map
 
+# === Auto-expand rows if needed ===
+def ensure_row_capacity(required_rows):
+    current_rows = sheet.row_count
+    if required_rows > current_rows:
+        needed = required_rows - current_rows
+        sheet.add_rows(needed)
+        print(f"➕ Added {needed} extra rows, total now: {current_rows + needed}")
+
 # === Update Google Sheet ===
 def update_sheet(roll, attendance, col_position, roll_map):
-    # Remove trailing 'P' for storage
-    clean_roll = roll[:-1]
+    clean_roll = roll[:-1]  # remove trailing 'P' for storage
 
     if clean_roll in roll_map:
-        # Existing student → update column
+        # Existing student → update in same row
         row_idx = roll_map[clean_roll]
         sheet.update_cell(row_idx, col_position, attendance)
     else:
-        # New student → append at bottom
+        # New student → append safely
         print(f"➕ Adding new roll to sheet: {clean_roll}")
+        last_row_index = len(sheet.get_all_values()) + 1
+
+        # Ensure enough rows before writing
+        ensure_row_capacity(last_row_index)
+
+        # Append new row
         sheet.append_row([clean_roll, "", attendance])  # Roll | Name(empty) | Attendance
         # Update roll_map dynamically
-        last_row = len(sheet.get_all_values())
-        roll_map[clean_roll] = last_row
+        roll_map[clean_roll] = last_row_index
 
 # === Run Scraping ===
 def run_parallel_scraping():
     rolls = generate_roll_numbers()
     print(f"📋 Generated {len(rolls)} roll numbers")
 
-    # Prepare column header
+    # Prepare new column header
     col_position = prepare_new_column()
     roll_map = get_existing_rolls()
 
