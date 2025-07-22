@@ -58,7 +58,7 @@ def generate_roll_numbers():
                 continue
             rolls.append(BASE_PREFIX + code)
 
-    print(f"📋 Generated {len(rolls)} roll numbers (72→D9)")
+    print(f"📋 Generated {len(rolls)} roll numbers")
     return rolls
 
 # === Scraper Worker ===
