@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
 MAX_ATTEMPTS = 3
 MAX_THREADS = 5
+BASE_PREFIX = "217Z1A05"  # Fixed prefix
 
 # === Google Sheets Setup ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -30,17 +31,30 @@ chrome_options.add_argument('--disable-notifications')
 chrome_options.add_argument('--log-level=3')
 chrome_options.add_argument('--window-size=1280,800')
 
-# === Get roll numbers from sheet (row 11+) ===
-def get_rolls_from_sheet():
-    all_rows = sheet.get_all_values()
+# === Generate Roll Numbers (72 → 99, A1 → D9) ===
+def generate_roll_numbers():
     rolls = []
-    for row in all_rows[10:]:  # rows after header
-        if len(row) > 0 and row[0].strip():
-            rolls.append(row[0].strip() + "P")  # add P for login
+
+    # Phase 1: numeric 72–99
+    for num in range(72, 100):
+        code = str(num)
+        if code in ["80", "88"]:  # skip invalids
+            continue
+        rolls.append(BASE_PREFIX + code)
+
+    # Phase 2: A1–D9
+    for letter in ["A", "B", "C", "D"]:
+        for d in range(0, 10):
+            code = f"{letter}{d}"
+            if code == "A0":  # skip invalid
+                continue
+            rolls.append(BASE_PREFIX + code)
+
+    print(f"📋 Generated {len(rolls)} roll numbers (72→D9)")
     return rolls
 
 # === Scraper Worker ===
-def process_roll(roll):
+def process_roll(rollP):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             driver = webdriver.Chrome(options=chrome_options)
@@ -49,11 +63,11 @@ def process_roll(roll):
 
             driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
 
-            # Username = Password = Roll
-            wait.until(EC.presence_of_element_located((By.ID, "txtUserName"))).send_keys(roll)
+            # Username = Password = Roll + P
+            wait.until(EC.presence_of_element_located((By.ID, "txtUserName"))).send_keys(rollP)
             driver.find_element(By.ID, "btnNext").click()
 
-            wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(roll)
+            wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(rollP)
             driver.find_element(By.ID, "btnSubmit").click()
 
             # Click Dashboard
@@ -63,11 +77,11 @@ def process_roll(roll):
             wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_lblTotalPercentage")))
             attendance = driver.find_element(By.ID, "ctl00_cpStud_lblTotalPercentage").text.strip()
 
-            print(f"✅ {roll} → {attendance}")
-            return (roll, attendance)
+            print(f"✅ {rollP} → {attendance}")
+            return (rollP[:-1], attendance)  # remove P before storing
 
         except Exception as e:
-            print(f"⚠️ Attempt {attempt} failed: {roll} — {e}")
+            print(f"⚠️ Attempt {attempt} failed: {rollP} — {e}")
             time.sleep(0.5)
         finally:
             try:
@@ -75,36 +89,50 @@ def process_roll(roll):
             except:
                 pass
 
-    print(f"❌ Max attempts failed: {roll}")
-    return (roll, "")
+    print(f"❌ Max attempts failed: {rollP}")
+    return (rollP[:-1], "")
 
-# === Prepare new column (after Name) ===
+# === Prepare new column (after Name = Column C) ===
 def prepare_new_column():
     ist_time = datetime.now(ZoneInfo("Asia/Kolkata"))
     current_datetime = ist_time.strftime("%Y-%m-%d %I:%M %p")
 
-    # Insert column at position 3 (C)
+    # Insert a column at position 3 (C)
     sheet.insert_cols([[]], 3)
     sheet.update_cell(10, 3, current_datetime)  # header in row 10
 
     print(f"📅 Created new column C with timestamp: {current_datetime}")
     return 3  # always C for this run
 
+# === Get existing roll → row mapping from sheet ===
+def get_roll_row_mapping():
+    all_rows = sheet.get_all_values()
+    roll_map = {}
+    for idx, row in enumerate(all_rows[10:], start=11):  # after header row
+        if len(row) > 0 and row[0].strip():
+            roll_map[row[0].strip()] = idx
+    return roll_map
+
 # === Run Scraping ===
 def run_parallel_scraping():
-    rolls = get_rolls_from_sheet()
-    print(f"📋 Found {len(rolls)} rolls from sheet")
+    rolls = generate_roll_numbers()  # generate 72→99 + A1→D9
+    roll_to_row = get_roll_row_mapping()
+    print(f"🗂 Found {len(roll_to_row)} rolls mapped in sheet")
 
-    # Create new column
+    # Create column header
     col_position = prepare_new_column()
 
+    # Convert to login format (add P)
+    rolls_with_P = [r + "P" for r in rolls]
+
+    # Process in batches
     batch_size = MAX_THREADS
-    total_batches = (len(rolls) + batch_size - 1) // batch_size
+    total_batches = (len(rolls_with_P) + batch_size - 1) // batch_size
 
     for batch_index in range(total_batches):
         start = batch_index * batch_size
         end = start + batch_size
-        batch_rolls = rolls[start:end]
+        batch_rolls = rolls_with_P[start:end]
 
         print(f"\n🚀 Batch {batch_index + 1}/{total_batches}: {batch_rolls}")
 
@@ -112,23 +140,20 @@ def run_parallel_scraping():
         with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
             futures = {executor.submit(process_roll, roll): roll for roll in batch_rolls}
             for future in as_completed(futures):
-                roll = futures[future]
-                try:
-                    r, attendance = future.result()
-                    batch_results[r] = attendance
-                except Exception as e:
-                    print(f"❌ Error scraping {roll}: {e}")
-                    batch_results[roll] = ""
+                roll, attendance = future.result()
+                batch_results[roll] = attendance
 
-        # ✅ Update this batch into correct row
-        for idx, roll in enumerate(batch_rolls, start=start + 11):  # row 11+
-            clean_roll = roll[:-1]  # remove P
-            attendance = batch_results.get(roll, "")
-            sheet.update_cell(idx, col_position, attendance)
+        # ✅ Update sheet for batch
+        for roll, attendance in batch_results.items():
+            if roll in roll_to_row:
+                row_idx = roll_to_row[roll]
+                sheet.update_cell(row_idx, col_position, attendance)
+            else:
+                print(f"⚠️ Roll {roll} not found in sheet → skipped")
 
         time.sleep(1)
 
-    print("\n✅ All rolls updated in column C with attendance!")
+    print("\n✅ All rolls processed & attendance updated!")
 
 # === MAIN ===
 if __name__ == "__main__":
