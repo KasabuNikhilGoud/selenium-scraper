@@ -14,8 +14,6 @@ SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
 MAX_ATTEMPTS = 3
 MAX_THREADS = 5
 
-BASE_PREFIX = "237Z1A05"  # Fixed part before the roll number sequence
-
 # === Google Sheets Setup ===
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
@@ -32,24 +30,13 @@ chrome_options.add_argument('--disable-notifications')
 chrome_options.add_argument('--log-level=3')
 chrome_options.add_argument('--window-size=1280,800')
 
-# === Generate Roll Numbers ===
-def generate_roll_numbers():
+# === Get roll numbers from sheet (row 11+) ===
+def get_rolls_from_sheet():
+    all_rows = sheet.get_all_values()
     rolls = []
-
-    # Phase 1: numeric sequence (72–99)
-    for num in range(72, 100):
-        rolls.append(f"{BASE_PREFIX}{num}P")
-
-    # Phase 2: After 99 → A0, A1…A9, B0…B9, ...
-    letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for letter in letters:
-        for d in range(0, 10):
-            code = f"{letter}{d}"
-            # Skip invalids
-            if code in ["A0", "88", "80"]:
-                continue
-            rolls.append(f"{BASE_PREFIX}{code}P")
-
+    for row in all_rows[10:]:  # rows after header
+        if len(row) > 0 and row[0].strip():
+            rolls.append(row[0].strip() + "P")  # add P for login
     return rolls
 
 # === Scraper Worker ===
@@ -91,76 +78,25 @@ def process_roll(roll):
     print(f"❌ Max attempts failed: {roll}")
     return (roll, "")
 
-# === Prepare Column Header & Auto-expand columns ===
+# === Prepare new column (after Name) ===
 def prepare_new_column():
     ist_time = datetime.now(ZoneInfo("Asia/Kolkata"))
     current_datetime = ist_time.strftime("%Y-%m-%d %I:%M %p")
 
-    # ✅ Get sheet size
-    rows = sheet.row_count
-    cols = sheet.col_count
+    # Insert column at position 3 (C)
+    sheet.insert_cols([[]], 3)
+    sheet.update_cell(10, 3, current_datetime)  # header in row 10
 
-    # ✅ Find next available column after header row
-    headers = sheet.row_values(10)  # Row 10 is header
-    col_position = len(headers) + 1
-
-    # ✅ Expand sheet if not enough columns
-    if col_position > cols:
-        needed = col_position - cols
-        sheet.add_cols(needed)
-        print(f"➕ Added {needed} extra column(s), total now: {cols + needed}")
-
-    # ✅ Finally write timestamp header
-    sheet.update_cell(10, col_position, current_datetime)
-    print(f"📅 Created new column at col {col_position}: {current_datetime}")
-    return col_position
-
-# === Get existing rolls from sheet for quick lookup ===
-def get_existing_rolls():
-    all_rows = sheet.get_all_values()
-    roll_map = {}  # roll → row number
-    for idx, row in enumerate(all_rows[10:], start=11):  # after header row
-        if len(row) > 0 and row[0].strip():
-            roll_map[row[0].strip()] = idx
-    return roll_map
-
-# === Auto-expand rows if needed ===
-def ensure_row_capacity(required_rows):
-    current_rows = sheet.row_count
-    if required_rows > current_rows:
-        needed = required_rows - current_rows
-        sheet.add_rows(needed)
-        print(f"➕ Added {needed} extra rows, total now: {current_rows + needed}")
-
-# === Update Google Sheet ===
-def update_sheet(roll, attendance, col_position, roll_map):
-    clean_roll = roll[:-1]  # remove trailing 'P' for storage
-
-    if clean_roll in roll_map:
-        # Existing student → update in same row
-        row_idx = roll_map[clean_roll]
-        sheet.update_cell(row_idx, col_position, attendance)
-    else:
-        # New student → append safely
-        print(f"➕ Adding new roll to sheet: {clean_roll}")
-        last_row_index = len(sheet.get_all_values()) + 1
-
-        # Ensure enough rows before writing
-        ensure_row_capacity(last_row_index)
-
-        # Append new row
-        sheet.append_row([clean_roll, "", attendance])  # Roll | Name(empty) | Attendance
-        # Update roll_map dynamically
-        roll_map[clean_roll] = last_row_index
+    print(f"📅 Created new column C with timestamp: {current_datetime}")
+    return 3  # always C for this run
 
 # === Run Scraping ===
 def run_parallel_scraping():
-    rolls = generate_roll_numbers()
-    print(f"📋 Generated {len(rolls)} roll numbers")
+    rolls = get_rolls_from_sheet()
+    print(f"📋 Found {len(rolls)} rolls from sheet")
 
-    # Prepare new column header
+    # Create new column
     col_position = prepare_new_column()
-    roll_map = get_existing_rolls()
 
     batch_size = MAX_THREADS
     total_batches = (len(rolls) + batch_size - 1) // batch_size
@@ -184,13 +120,15 @@ def run_parallel_scraping():
                     print(f"❌ Error scraping {roll}: {e}")
                     batch_results[roll] = ""
 
-        # ✅ Update each roll result immediately
-        for roll, attendance in batch_results.items():
-            update_sheet(roll, attendance, col_position, roll_map)
+        # ✅ Update this batch into correct row
+        for idx, roll in enumerate(batch_rolls, start=start + 11):  # row 11+
+            clean_roll = roll[:-1]  # remove P
+            attendance = batch_results.get(roll, "")
+            sheet.update_cell(idx, col_position, attendance)
 
         time.sleep(1)
 
-    print("\n✅ All batches completed & sheet updated!")
+    print("\n✅ All rolls updated in column C with attendance!")
 
 # === MAIN ===
 if __name__ == "__main__":
