@@ -126,7 +126,7 @@ jobs:
                   padding: 3px 90px;
                   margin: 4px;
                   text-decoration: none;
-                  color: #ffffff;
+                  color: white;
                   border-radius: 20px;
                   font-size: 12px;
                   font-weight: bold;
