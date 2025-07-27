@@ -188,7 +188,7 @@ jobs:
                        class="btn btn-red">📜 View Logs</a><br>
 
                     <!-- Retry Workflow Link -->
-                    <a href="${{ github.server_url }}/${{ github.repository }}/actions"
+                    <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs"
                        class="btn btn-gray">🔄 Retry Workflow</a>
                   </div>
 
