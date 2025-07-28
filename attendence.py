@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 
 # === CONFIG ===
-SHEET_ID = "13ZP7Q9-Yc4mFM64zGosg0CZYWtwWq2RlL9piU2B7qeY"
+SHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"
 MAX_ATTEMPTS = 3
 MAX_THREADS = 15
 BASE_PREFIX = "237Z1A05"
