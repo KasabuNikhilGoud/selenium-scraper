@@ -9,7 +9,6 @@ import gspread
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from bs4 import BeautifulSoup
 
 # === CONFIG ===
 SHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"
