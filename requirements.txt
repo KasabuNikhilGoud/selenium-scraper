@@ -1,0 +1,4 @@
+selenium==4.11.2
+beautifulsoup4==4.12.2
+gspread==5.7.0
+oauth2client==4.1.3
