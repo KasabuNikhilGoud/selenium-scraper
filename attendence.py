@@ -30,7 +30,7 @@ scope = [
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
 
-SPREADSHEET_ID = "1hu2BoArCojZJGHNODGuaHNE3agS4wylbr_MFOeEWiKI"
+SPREADSHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"
 sheet = client.open_by_key(SPREADSHEET_ID)
 
 main_sheet = sheet.worksheet("Attendence CSE-B(2023-27)")
