@@ -2,49 +2,50 @@ name: Daily Selenium Scraper
 
 on:
   schedule:
-    - cron: "0 */5 * * *"   # Runs daily at 05:30 AM IST (00:00 UTC)
-  workflow_dispatch:        # Allows manual run from Actions tab
+    - cron: "0 */5 * * *"  # Runs daily at 05:30 AM IST (00:00 UTC)
+  workflow_dispatch:      # Allows manual run from Actions tab
 
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Step 1: Checkout repo
+      # Step 1: Checkout repository
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # ✅ Step 2: Setup Python
+      # Step 2: Set up Python
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # ✅ Step 3: Install dependencies + Chromium
+      # Step 3: Install dependencies + Chromium
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser chromium-chromedriver
           which chromium-browser
           which chromedriver
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ✅ Step 4: Create Google Sheets credentials
+      # Step 4: Create Google Sheets credentials
       - name: Create Google credentials file
         run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
-      # ✅ Step 5: Capture current IST time
+      # Step 5: Capture current IST time
       - name: Get current time in IST
         id: runtime
         run: |
           export TZ=Asia/Kolkata
           echo "now=$(date '+%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
 
-      # ✅ Step 6: Run the Selenium scraper
+      # Step 6: Run the Selenium scraper
       - name: Run scraper
         run: python attendence.py
 
-      # ✅ Step 7: Send email notification (always runs)
+      # Step 7: Send email notification (always runs)
       - name: Send email notification
         if: always()
         uses: dawidd6/action-send-mail@v3
@@ -195,7 +196,6 @@ jobs:
                   <p>Keep track easily! 🚀</p>
                   <p>Cheers,<br>Automation Bot 🤖</p>
                 </div>
-
 
                 <!-- Footer -->
                 <div class="footer">
