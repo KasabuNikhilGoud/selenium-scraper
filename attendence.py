@@ -30,7 +30,7 @@ scope = [
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
 
-SPREADSHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"
+SPREADSHEET_ID = "1hu2BoArCojZJGHNODGuaHNE3agS4wylbr_MFOeEWiKI"
 sheet = client.open_by_key(SPREADSHEET_ID)
 
 main_sheet = sheet.worksheet("Attendence CSE-B(2023-27)")
@@ -42,10 +42,11 @@ chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--window-size=1920,1080")
 chrome_options.add_argument("--no-sandbox")
 
-rolls = main_sheet.col_values(9)[7:]
-rolls = [r for r in rolls if r.strip() != ""]
+# ✅ Read only I8:I21 range (specific 14 students)
+roll_cells = main_sheet.range("I8:I21")
+rolls = [(cell.row, cell.value.strip()) for cell in roll_cells if cell.value.strip()]
 
-for roll in rolls:
+for row_index, roll in rolls:
     driver = webdriver.Chrome(options=chrome_options)
     try:
         driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
@@ -59,7 +60,7 @@ for roll in rolls:
             EC.presence_of_element_located((By.ID, "txtPwd"))
         ).send_keys(roll)
 
-        driver.find_element(By.ID, "btnLogin" ).click()
+        driver.find_element(By.ID, "btnLogin").click()
 
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.LINK_TEXT, "Click Here to go Student Dashbord"))
@@ -90,23 +91,24 @@ for roll in rolls:
         subject_list = [
             "DAA", "CN", "DEVOPS", "PPL", "NLP",
             "CN LAB", "DEVOPS LAB", "ACS LAB", "IPR",
-            "Sports", "Mentoring", "Association", "Library"
+            "SPORTS", "MENTORING", "ASSOCIATION", "LIBRARY"
         ]
 
-        row_index = rolls.index(roll) + 8
-
+        # ✅ Update Overall % column in main sheet
         main_sheet.update(f"D{row_index}", [[subject_data.get(subj, ("", ""))[1] for subj in subject_list]])
 
+        # ✅ Update each subject sheet
         for ws in all_sheets:
             title = ws.title.strip().upper()
             if title in subject_list:
                 col_labels = ws.row_values(25)
-                percent_col = col_labels.index("Percentage%") + 4
-                attended_col = percent_col - 1
-                ws.update_cell(26, attended_col, subject_data.get(title, ("", ""))[0])
-                ws.update_cell(26, percent_col, subject_data.get(title, ("", ""))[1])
+                if "Percentage%" in col_labels:
+                    percent_col = col_labels.index("Percentage%") + 4
+                    attended_col = percent_col - 1
+                    ws.update_cell(row_index, attended_col, subject_data.get(title, ("", ""))[0])
+                    ws.update_cell(row_index, percent_col, subject_data.get(title, ("", ""))[1])
 
     except Exception as e:
-        print(f"Error for {roll}: {e}")
+        print(f"❌ Error for {roll}: {e}")
     finally:
         driver.quit()
