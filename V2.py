@@ -1,4 +1,4 @@
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -6,51 +6,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 import time
-import subprocess
-from shutil import which
-import tempfile
-import shutil
-import os
 
 # Setup Chrome options
 chrome_options = Options()
-# chrome_options.add_argument("--headless=new")  # Uncomment for headless run
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--log-level=3")
 chrome_options.add_argument("--window-size=1280,800")
 chrome_options.add_argument("--disable-notifications")
-chrome_options.add_argument("--no-default-browser-check")
-chrome_options.add_argument("--disable-extensions")
-chrome_options.add_argument("--disable-dev-tools")
 
-# ✅ Fix: Use unique temp user-data-dir to avoid conflicts
-user_data_dir = tempfile.mkdtemp()
-chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
-
-# Detect Chromium binary
-chrome_path = which("chromium-browser")
-if chrome_path:
-    print(f"✅ Found Chromium at: {chrome_path}")
-    chrome_options.binary_location = chrome_path
-    try:
-        version_output = subprocess.check_output([chrome_path, "--version"], text=True)
-        print(f"ℹ️ Chromium version: {version_output.strip()}")
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️ Failed to get Chromium version: {e}")
-else:
-    print("⚠️ Chromium not found, using default Chrome")
-
-# Initialize WebDriver
-try:
-    driver = webdriver.Chrome(options=chrome_options)
-    print("✅ WebDriver session initialized")
-except Exception as e:
-    print(f"⚠️ Failed to initialize WebDriver session: {e}")
-    shutil.rmtree(user_data_dir, ignore_errors=True)
-    raise
-
+# ✅ Initialize undetected Chrome (auto handles user profile/session issues)
+driver = uc.Chrome(options=chrome_options, headless=False)
 wait = WebDriverWait(driver, 60)
 
 try:
@@ -84,7 +50,7 @@ try:
         try:
             wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_PanelSubjectwise")))
             wait.until(EC.visibility_of_element_located((By.XPATH, "//table[@id='ctl00_cpStud_grdSubject']//tr")))
-            time.sleep(10)  # Give time for dynamic load
+            time.sleep(10)
 
             table_div = driver.find_element(By.ID, "ctl00_cpStud_PanelSubjectwise")
             rows = table_div.find_elements(By.XPATH, ".//tr")[1:]
@@ -123,7 +89,6 @@ try:
 
 finally:
     driver.quit()
-    shutil.rmtree(user_data_dir, ignore_errors=True)
 
 # Step 6: Update Google Sheet (D8:D21)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
