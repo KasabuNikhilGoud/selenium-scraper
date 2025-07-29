@@ -7,6 +7,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 import time
 import os
+import shutil
 from shutil import which
 
 # Setup Chrome options (temporarily non-headless for debugging)
@@ -18,9 +19,15 @@ chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--log-level=3")
 chrome_options.add_argument("--window-size=1280,800")
 chrome_options.add_argument("--disable-notifications")  # Prevent pop-ups
+chrome_options.add_argument("--no-default-browser-check")  # Avoid default profile interference
+chrome_options.add_argument("--disable-extensions")  # Disable extensions that might conflict
 
-# Generate a unique user data directory to avoid conflicts
-unique_dir = f"/tmp/chrome-profile-{os.getpid()}-{time.time()}"
+# Generate a unique user data directory and ensure it’s created
+unique_dir = f"/tmp/chrome-profile-{os.getpid()}-{time.time_ns()}"  # Use nanoseconds for uniqueness
+print(f"ℹ️ Using user data directory: {unique_dir}")
+os.makedirs(unique_dir, exist_ok=True)
+
+# Add the user data directory argument
 chrome_options.add_argument(f"--user-data-dir={unique_dir}")
 
 # Detect chromium-browser path for compatibility (e.g., GitHub Actions)
@@ -32,7 +39,13 @@ else:
     print("⚠️ Chromium not found, using default Chrome")
 
 # Initialize WebDriver
-driver = webdriver.Chrome(options=chrome_options)
+try:
+    driver = webdriver.Chrome(options=chrome_options)
+    print("✅ WebDriver session initialized")
+except Exception as e:
+    print(f"⚠️ Failed to initialize WebDriver session: {e}")
+    raise
+
 wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
 
 try:
