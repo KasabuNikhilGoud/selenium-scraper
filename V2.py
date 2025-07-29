@@ -3,74 +3,62 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from oauth2client.service_account import ServiceAccountCredentials
 import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 import time
 
-# --- Setup Chrome Options ---
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--window-size=1920x1080")
-chrome_options.add_argument("--log-level=3")
-
-# --- Setup Google Sheets ---
+# --- Google Sheets Setup ---
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
-SHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"  # Your Sheet ID
-main_sheet = client.open_by_key(SHEET_ID).worksheet("Attendence CSE-B(2023-27)")
 
-# --- Function to Extract and Update Classes Held ---
-def update_classes_held_to_main_sheet():
-    rollP = "237Z1A0575P"
-    roll = rollP[:-1]  # Password = Roll number without last character
+# Open the sheet
+spreadsheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4")
+worksheet = spreadsheet.worksheet("Attendence CSE-B(2023-27)")
 
-    try:
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(10)
-        wait = WebDriverWait(driver, 5)
+# --- Selenium Setup ---
+chrome_options = Options()
+chrome_options.add_argument('--headless')
+chrome_options.add_argument('--no-sandbox')
+chrome_options.add_argument('--disable-dev-shm-usage')
 
-        # Step 1: Login
-        driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
-        wait.until(EC.presence_of_element_located((By.ID, "txtUserName"))).send_keys(rollP)
-        driver.find_element(By.ID, "btnNext").click()
-        wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(rollP)
-        driver.find_element(By.ID, "btnSubmit").click()
+driver = webdriver.Chrome(options=chrome_options)
+wait = WebDriverWait(driver, 10)
 
-        # Step 2: Go to Dashboard
-        wait.until(EC.presence_of_element_located((By.LINK_TEXT, "Click Here to go Student Dashbord"))).click()
+try:
+    # Step 1: Open login page
+    driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
 
-        # Step 3: Wait for Subject-wise Attendance Table
-        wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_grdSubject")))
-        table = driver.find_element(By.ID, "ctl00_cpStud_grdSubject")
-        rows = table.find_elements(By.TAG_NAME, "tr")[1:]  # skip header row
+    # Step 2: Enter Hall Ticket Number (username) and go next
+    roll_number = "237Z1A0575P"
+    driver.find_element(By.ID, "txtHTNO").send_keys(roll_number)
+    driver.find_element(By.ID, "btnNext").click()
 
-        classes_held = []
-        for row in rows:
-            cols = row.find_elements(By.TAG_NAME, "td")
-            if len(cols) >= 4:
-                held = cols[3].text.strip()
-                classes_held.append(held if held else "0")
+    # Step 3: Enter password (same as phone number or HTNO if that's how it works)
+    wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(roll_number)
+    driver.find_element(By.ID, "btnLogin").click()
 
-        # Step 4: Write to Google Sheet (D8:D21)
-        cell_range = f"D8:D{7 + len(classes_held)}"
-        cell_list = main_sheet.range(cell_range)
+    # Step 4: Click on "Click Here to go Student Dashbord"
+    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Click Here to go Student Dashbord"))).click()
 
-        for i, cell in enumerate(cell_list):
-            cell.value = classes_held[i]
+    # Step 5: Wait for Subject-wise attendance to load
+    wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_PanelSubjectwise")))
 
-        main_sheet.update_cells(cell_list)
-        print(f"✅ Inserted {len(classes_held)} Classes Held values to D8:D21 successfully.")
+    # Step 6: Get all 'Classes Held' values
+    classes_held_elements = driver.find_elements(By.XPATH, '//table[@id="ctl00_cpStud_GridSubjectwise"]/tbody/tr/td[6]')
+    classes_held = [el.text for el in classes_held_elements if el.text.strip().isdigit()]
 
-    except Exception as e:
-        print(f"❌ Error: {e}")
-    finally:
-        try:
-            driver.quit()
-        except:
-            pass
+    # Debug print
+    print("Classes Held per subject:", classes_held)
 
-# --- Run ---
-if __name__ == "__main__":
-    update_classes_held_to_main_sheet()
+    # Step 7: Insert into Google Sheet D8:D21
+    update_range = 'D8:D21'
+    values = [[val] for val in classes_held]
+    worksheet.update(update_range, values)
+    print("✅ Successfully inserted classes held into Google Sheet.")
+
+except Exception as e:
+    print("❌ Error:", e)
+
+finally:
+    driver.quit()
