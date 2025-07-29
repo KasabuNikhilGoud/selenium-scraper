@@ -64,12 +64,14 @@ try:
         classes_held_list = []
         for row in rows:
             cells = row.find_elements(By.TAG_NAME, "td")
-            if len(cells) >= 3:
-                held_value = cells[2].text.strip()  # 3rd column = "Classes Held"
-                try:
-                    classes_held_list.append(int(held_value))
-                except:
-                    classes_held_list.append(0)
+            if len(cells) >= 6:  # Ensure row has enough columns
+                subject_name = cells[1].text.strip()  # Subject is in 2nd column
+                if subject_name != "-":  # Skip the "Total" row
+                    held_value = cells[3].text.strip()  # Classes Held is 4th column (index 3)
+                    try:
+                        classes_held_list.append(int(held_value))
+                    except:
+                        classes_held_list.append(0)
 
         print("✅ Extracted Classes Held:", classes_held_list)
     except:
@@ -85,17 +87,17 @@ client = gspread.authorize(creds)
 
 try:
     # Open sheet by ID
-    sheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4").worksheet("Attendence CSE-B(2023-27)")
+    sheet = client.open_by_key("1hu2BoArCojZJGHNODGuaHNE3agS4wylbr_MFOeEWiKI").worksheet("Attendence CSE-B(2023-27)")
 
     # Ensure list has exactly 14 values (D8:D21)
     while len(classes_held_list) < 14:
         classes_held_list.append(0)
     classes_held_list = classes_held_list[:14]
 
-    # Convert to 2D array and update range
+    # Convert to 2D array and update range (fix deprecation warning)
     update_range = 'D8:D21'
     data = [[val] for val in classes_held_list]
-    sheet.update(update_range, data)
+    sheet.update(values=data, range_name=update_range)  # Use named arguments
 
     print("✅ Classes Held inserted into D8:D21")
 except Exception as e:
