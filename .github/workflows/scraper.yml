@@ -27,7 +27,7 @@ jobs:
           sudo apt-get install -y chromium-browser chromium-chromedriver
           which chromium-browser
           which chromedriver
-          pip install -r requirements_V4.txt
+          pip install -r requirements.txt
 
       # ✅ Step 4: Create Google Sheets credentials
       - name: Create Google credentials file
@@ -42,7 +42,7 @@ jobs:
 
       # ✅ Step 6: Run the Selenium scraper
       - name: Run scraper
-        run: python V2.py
+        run: python attendence_V4.py
 
       # ✅ Step 7: Send email notification (always runs)
       - name: Send email notification
