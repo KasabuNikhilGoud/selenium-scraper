@@ -18,7 +18,7 @@ chrome_options.add_argument("--log-level=3")
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
-SHEET_ID = "1hu2BoArCojZJGHNODGuaHNE3agS4wylbr_MFOeEWiKI"  # Your Sheet ID
+SHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"  # Your Sheet ID
 main_sheet = client.open_by_key(SHEET_ID).worksheet("Attendence CSE-B(2023-27)")
 
 # --- Function to Extract and Update Classes Held ---
