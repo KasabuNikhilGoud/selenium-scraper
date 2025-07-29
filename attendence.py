@@ -1,114 +1,97 @@
-import time
-import json
-import re
-import os
-from datetime import datetime
-
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import gspread
+from shutil import which
+import time
 
-# ✅ Handle bs4 without installing globally
-try:
-    from bs4 import BeautifulSoup
-except ImportError:
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "beautifulsoup4"])
-    from bs4 import BeautifulSoup
+# === CONFIG ===
+ROLL_P = "237Z1A0575P"
+ROLL = ROLL_P[:-1]
+SHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"
 
-# Google Sheets setup
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
+# === Google Sheets Setup ===
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
 
-SPREADSHEET_ID = "1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4"
-sheet = client.open_by_key(SPREADSHEET_ID)
-
-main_sheet = sheet.worksheet("Attendence CSE-B(2023-27)")
-all_sheets = sheet.worksheets()
-
-chrome_options = Options()
-chrome_options.add_argument("--headless")
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--window-size=1920,1080")
+# === Chrome Setup ===
+chrome_options = webdriver.ChromeOptions()
+chrome_options.add_argument("--headless=new")
 chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--disable-notifications")
+chrome_options.add_argument("--log-level=3")
+chrome_options.add_argument("--window-size=1280,800")
 
-# ✅ Read only I8:I21 range (specific 14 students)
-roll_cells = main_sheet.range("I8:I21")
-rolls = [(cell.row, cell.value.strip()) for cell in roll_cells if cell.value.strip()]
+# For GitHub Actions / Linux
+chrome_path = which("chromium-browser")
+if chrome_path:
+    chrome_options.binary_location = chrome_path
 
-for row_index, roll in rolls:
-    driver = webdriver.Chrome(options=chrome_options)
+# === Main Function ===
+def test_single_student_subject_attendance():
     try:
-        driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "txtUserId"))
-        ).send_keys(roll)
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.set_page_load_timeout(10)
+        wait = WebDriverWait(driver, 5)
 
+        # Step 1: Open login page
+        driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
+
+        # Step 2: Enter roll and go to password
+        wait.until(EC.presence_of_element_located((By.ID, "txtUserName"))).send_keys(ROLL_P)
         driver.find_element(By.ID, "btnNext").click()
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "txtPwd"))
-        ).send_keys(roll)
+        # Step 3: Enter password and login
+        wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(ROLL_P)
+        driver.find_element(By.ID, "btnSubmit").click()
 
-        driver.find_element(By.ID, "btnLogin").click()
+        # Step 4: Click to go to Dashboard
+        wait.until(EC.presence_of_element_located((By.LINK_TEXT, "Click Here to go Student Dashbord"))).click()
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.LINK_TEXT, "Click Here to go Student Dashbord"))
-        ).click()
+        # Step 5: Wait for subject table
+        wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_grdSubject")))
+        table = driver.find_element(By.ID, "ctl00_cpStud_grdSubject")
+        rows = table.find_elements(By.TAG_NAME, "tr")[1:]  # Skip header
 
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.ID, "ctl00_cpStud_lblTotalPercentage"))
-        )
+        subject_data = []
+        for row in rows:
+            cols = row.find_elements(By.TAG_NAME, "td")
+            if len(cols) >= 6:
+                slno = cols[0].text.strip()
+                subject = cols[1].text.strip()
+                faculty = cols[2].text.strip()
+                held = cols[3].text.strip()
+                attended = cols[4].text.strip()
+                percent = cols[5].text.strip()
+                subject_data.append([slno, subject, faculty, held, attended, percent])
 
-        page_source = driver.page_source
-        soup = BeautifulSoup(page_source, "html.parser")
+        print(f"✅ Found {len(subject_data)} subjects for {ROLL}")
 
-        subject_blocks = soup.find_all("table", {"class": "table table-bordered table-hover table-striped"})
+        # Step 6: Insert into new sheet named "237Z1A0575"
+        try:
+            target_sheet = client.open_by_key(SHEET_ID).worksheet(ROLL)
+        except gspread.exceptions.WorksheetNotFound:
+            target_sheet = client.open_by_key(SHEET_ID).add_worksheet(title=ROLL, rows="100", cols="10")
 
-        subject_data = {}
-        for table in subject_blocks:
-            headers = [th.get_text(strip=True) for th in table.find_all("th")]
-            if "Subject" not in headers:
-                continue
-            for row in table.find_all("tr")[1:]:
-                cells = row.find_all("td")
-                if len(cells) >= 5:
-                    subject = cells[0].get_text(strip=True)
-                    attended = cells[2].get_text(strip=True)
-                    percent = cells[4].get_text(strip=True).replace("%", "")
-                    subject_data[subject.upper()] = (attended, percent)
+        target_sheet.clear()
+        target_sheet.append_row(["SlNo", "Subject", "Faculty", "Classes Held", "Classes Attended", "Att %"])
+        for row in subject_data:
+            target_sheet.append_row(row)
 
-        subject_list = [
-            "DAA", "CN", "DEVOPS", "PPL", "NLP",
-            "CN LAB", "DEVOPS LAB", "ACS LAB", "IPR",
-            "SPORTS", "MENTORING", "ASSOCIATION", "LIBRARY"
-        ]
-
-        # ✅ Update Overall % column in main sheet
-        main_sheet.update(f"D{row_index}", [[subject_data.get(subj, ("", ""))[1] for subj in subject_list]])
-
-        # ✅ Update each subject sheet
-        for ws in all_sheets:
-            title = ws.title.strip().upper()
-            if title in subject_list:
-                col_labels = ws.row_values(25)
-                if "Percentage%" in col_labels:
-                    percent_col = col_labels.index("Percentage%") + 4
-                    attended_col = percent_col - 1
-                    ws.update_cell(row_index, attended_col, subject_data.get(title, ("", ""))[0])
-                    ws.update_cell(row_index, percent_col, subject_data.get(title, ("", ""))[1])
+        print(f"📥 Subject-wise data inserted into sheet: {ROLL}")
 
     except Exception as e:
-        print(f"❌ Error for {roll}: {e}")
+        print(f"❌ Error: {e}")
     finally:
-        driver.quit()
+        try:
+            driver.quit()
+        except:
+            pass
+
+# === Run Main ===
+if __name__ == "__main__":
+    test_single_student_subject_attendance()
