@@ -24,7 +24,7 @@ main_sheet = client.open_by_key(SHEET_ID).worksheet("Attendence CSE-B(2023-27)")
 # --- Function to Extract and Update Classes Held ---
 def update_classes_held_to_main_sheet():
     rollP = "237Z1A0575P"
-    roll = rollP[:-1]  # use rollP as password
+    roll = rollP[:-1]  # Password = Roll number without last character
 
     try:
         driver = webdriver.Chrome(options=chrome_options)
@@ -44,7 +44,7 @@ def update_classes_held_to_main_sheet():
         # Step 3: Wait for Subject-wise Attendance Table
         wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_grdSubject")))
         table = driver.find_element(By.ID, "ctl00_cpStud_grdSubject")
-        rows = table.find_elements(By.TAG_NAME, "tr")[1:]  # skip header
+        rows = table.find_elements(By.TAG_NAME, "tr")[1:]  # skip header row
 
         classes_held = []
         for row in rows:
