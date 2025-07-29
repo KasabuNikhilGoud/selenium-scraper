@@ -8,26 +8,32 @@ import gspread
 import time
 import subprocess
 from shutil import which
+import tempfile
+import shutil
+import os
 
-# Setup Chrome options (temporarily non-headless for debugging)
+# Setup Chrome options
 chrome_options = Options()
-# chrome_options.add_argument("--headless=new")  # Comment out for non-headless mode
+# chrome_options.add_argument("--headless=new")  # Uncomment for headless run
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--log-level=3")
 chrome_options.add_argument("--window-size=1280,800")
-chrome_options.add_argument("--disable-notifications")  # Prevent pop-ups
-chrome_options.add_argument("--no-default-browser-check")  # Avoid default profile interference
-chrome_options.add_argument("--disable-extensions")  # Disable extensions that might conflict
-chrome_options.add_argument("--disable-dev-tools")  # Prevent dev tools interference
+chrome_options.add_argument("--disable-notifications")
+chrome_options.add_argument("--no-default-browser-check")
+chrome_options.add_argument("--disable-extensions")
+chrome_options.add_argument("--disable-dev-tools")
 
-# Detect chromium-browser path and version for compatibility
+# ✅ Fix: Use unique temp user-data-dir to avoid conflicts
+user_data_dir = tempfile.mkdtemp()
+chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+
+# Detect Chromium binary
 chrome_path = which("chromium-browser")
 if chrome_path:
     print(f"✅ Found Chromium at: {chrome_path}")
     chrome_options.binary_location = chrome_path
-    # Get Chromium version for debugging
     try:
         version_output = subprocess.check_output([chrome_path, "--version"], text=True)
         print(f"ℹ️ Chromium version: {version_output.strip()}")
@@ -42,9 +48,10 @@ try:
     print("✅ WebDriver session initialized")
 except Exception as e:
     print(f"⚠️ Failed to initialize WebDriver session: {e}")
+    shutil.rmtree(user_data_dir, ignore_errors=True)
     raise
 
-wait = WebDriverWait(driver, 60)  # Increased timeout to 60 seconds
+wait = WebDriverWait(driver, 60)
 
 try:
     # Step 1: Open BeeSERP Login Page
@@ -52,95 +59,85 @@ try:
     print("✅ Opened login page")
 
     # Step 2: Enter Hall Ticket Number and Click Next
-    try:
-        username_field = wait.until(EC.presence_of_element_located((By.ID, "txtUserName")))
-        username_field.send_keys("237Z1A0575P")
-        driver.find_element(By.ID, "btnNext").click()
-        print("✅ Entered username and clicked Next")
-    except Exception as e:
-        print(f"⚠️ Failed to locate txtUserName or btnNext: {e}")
+    username_field = wait.until(EC.presence_of_element_located((By.ID, "txtUserName")))
+    username_field.send_keys("237Z1A0575P")
+    driver.find_element(By.ID, "btnNext").click()
+    print("✅ Entered username and clicked Next")
 
-    # Step 3: Enter Password and Click Login
-    try:
-        password_field = wait.until(EC.presence_of_element_located((By.ID, "txtPassword")))
-        password_field.send_keys("237Z1A0575P")
-        driver.find_element(By.ID, "btnSubmit").click()
-        print("✅ Entered password and clicked Submit")
-    except Exception as e:
-        print(f"⚠️ Failed to locate txtPassword or btnSubmit: {e}")
+    # Step 3: Enter Password and Click Submit
+    password_field = wait.until(EC.presence_of_element_located((By.ID, "txtPassword")))
+    password_field.send_keys("237Z1A0575P")
+    driver.find_element(By.ID, "btnSubmit").click()
+    print("✅ Entered password and clicked Submit")
 
-    # Step 4: Click on Student Dashboard
-    try:
-        dashboard_link = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Click Here to go Student Dashbord")))
-        dashboard_link.click()
-        print("✅ Clicked on Student Dashboard")
-    except Exception as e:
-        print(f"⚠️ Failed to locate dashboard link: {e}")
+    # Step 4: Click on Dashboard Link
+    dashboard_link = wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Click Here to go Student Dashbord")))
+    dashboard_link.click()
+    print("✅ Clicked on Student Dashboard")
 
-    # Step 5: Wait for Subject-wise Attendance Table
-    classes_held_list = []  # Initialize to avoid undefined variable error
+    # Step 5: Extract Subject-wise Attendance
+    classes_held_list = []
     total_held = 0
-    max_retries = 5  # Increased retries
+    max_retries = 5
+
     for attempt in range(max_retries):
         try:
-            # Wait for the table container first
             wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_PanelSubjectwise")))
-            # Wait for any table row as a broader check
             wait.until(EC.visibility_of_element_located((By.XPATH, "//table[@id='ctl00_cpStud_grdSubject']//tr")))
-            time.sleep(10)  # Increased delay for dynamic content
-            table_div = wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_PanelSubjectwise")))
-            rows = table_div.find_elements(By.XPATH, ".//tr")[1:]  # Skip header
+            time.sleep(10)  # Give time for dynamic load
+
+            table_div = driver.find_element(By.ID, "ctl00_cpStud_PanelSubjectwise")
+            rows = table_div.find_elements(By.XPATH, ".//tr")[1:]
 
             for i, row in enumerate(rows, 1):
                 cells = row.find_elements(By.TAG_NAME, "td")
-                if len(cells) >= 6:  # Ensure row has enough columns
-                    subject_name = cells[1].text.strip()  # Subject is in 2nd column
-                    held_value = cells[3].text.strip()  # Classes Held is 4th column (index 3)
-                    print(f"Row {i}: Subject: {subject_name}, Classes Held: {held_value}")  # Detailed debug
+                if len(cells) >= 6:
+                    subject_name = cells[1].text.strip()
+                    held_value = cells[3].text.strip()
+                    print(f"Row {i}: Subject: {subject_name}, Classes Held: {held_value}")
                     try:
                         value = int(held_value)
-                        if subject_name != "-":  # Exclude "Total" from the main list
+                        if subject_name != "-":
                             classes_held_list.append(value)
                         else:
-                            total_held = value  # Capture the total value
+                            total_held = value
                     except ValueError:
-                        if subject_name != "-":
-                            classes_held_list.append(0)
+                        classes_held_list.append(0)
 
             print("✅ Extracted Classes Held:", classes_held_list)
             print(f"✅ Total Classes Held: {total_held}")
             if len(classes_held_list) != 13:
                 print(f"⚠️ Warning: Expected 13 rows, got {len(classes_held_list)}")
-            break  # Exit loop if successful
+            break
         except Exception as e:
-            print(f"⚠️ Attempt {attempt + 1}/{max_retries} failed to locate table: {e}")
-            time.sleep(10)  # Increased wait between retries
+            print(f"⚠️ Attempt {attempt + 1}/{max_retries} failed: {e}")
+            time.sleep(10)
             if attempt == max_retries - 1:
-                print("ℹ️ All attempts failed, using default empty list due to table loading failure")
-                classes_held_list = [0] * 13  # Default to 13 zeros for subjects
+                print("⚠️ Final fallback: filling with zeros")
+                classes_held_list = [0] * 13
 
-    # Save page source for debugging
+    # Save HTML snapshot for debugging
     with open("page_source.html", "w", encoding="utf-8") as f:
         f.write(driver.page_source)
     print("✅ Saved page source to page_source.html")
 
 finally:
     driver.quit()
+    shutil.rmtree(user_data_dir, ignore_errors=True)
 
-# Step 6: Insert into Google Sheet in range D8:D21
+# Step 6: Update Google Sheet (D8:D21)
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client = gspread.authorize(creds)
 
 try:
-    # Open sheet by ID
     sheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4").worksheet("Attendence CSE-B(2023-27)")
-    # Ensure list has exactly 14 values (D8:D21)
+
+    # Ensure exactly 14 values
     while len(classes_held_list) < 14:
         classes_held_list.append(0)
     classes_held_list = classes_held_list[:14]
 
-    # Convert to 2D array and update range
     update_range = 'D8:D21'
     data = [[val] for val in classes_held_list]
     sheet.update(values=data, range_name=update_range)
