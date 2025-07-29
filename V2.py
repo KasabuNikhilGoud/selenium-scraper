@@ -1,64 +1,102 @@
+import time
+import gspread
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import time
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from shutil import which
+from google.oauth2.service_account import Credentials
 
-# --- Google Sheets Setup ---
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+# Constants
+SPREADSHEET_ID = '1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4'
+SHEET_NAME = 'Attendence CSE-B(2023-27)'
+TARGET_RANGE = 'D8:D21'
+MAX_ATTEMPTS = 2
+
+# Google Sheets setup
+creds = Credentials.from_service_account_file("credentials.json", scopes=[
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+])
 client = gspread.authorize(creds)
+sheet = client.open_by_key(SPREADSHEET_ID).worksheet(SHEET_NAME)
+roll_numbers = sheet.get(TARGET_RANGE)
+rolls = [r[0].strip() for r in roll_numbers if r]
 
-# Open the sheet
-spreadsheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4")
-worksheet = spreadsheet.worksheet("Attendence CSE-B(2023-27)")
+# Column insert for timestamp header
+timestamp = datetime.now().strftime("%d-%b %I:%M %p")
+header_row = sheet.row_values(7)
+sheet.update_cell(7, len(header_row) + 1, timestamp)
 
-# --- Selenium Setup ---
-chrome_options = Options()
-chrome_options.add_argument('--headless')
-chrome_options.add_argument('--no-sandbox')
-chrome_options.add_argument('--disable-dev-shm-usage')
 
-driver = webdriver.Chrome(options=chrome_options)
-wait = WebDriverWait(driver, 10)
+def process_roll(roll):
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            # Chrome setup
+            chrome_options = Options()
+            chrome_options.add_argument("--headless=new")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.binary_location = which("chromium-browser")
 
-try:
-    # Step 1: Open login page
-    driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.get("https://exams-nnrg.in/BeeSERP/Login.aspx")
+            wait = WebDriverWait(driver, 10)
 
-    # Step 2: Enter Hall Ticket Number (username) and go next
-    roll_number = "237Z1A0575P"
-    driver.find_element(By.ID, "txtHTNO").send_keys(roll_number)
-    driver.find_element(By.ID, "btnNext").click()
+            # Step 1: Enter username
+            wait.until(EC.presence_of_element_located((By.ID, "txtUserName"))).send_keys(roll)
+            driver.find_element(By.ID, "btnNext").click()
 
-    # Step 3: Enter password (same as phone number or HTNO if that's how it works)
-    wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(roll_number)
-    driver.find_element(By.ID, "btnLogin").click()
+            # Step 2: Enter password
+            wait.until(EC.presence_of_element_located((By.ID, "txtPassword"))).send_keys(roll)
+            driver.find_element(By.ID, "btnSubmit").click()
 
-    # Step 4: Click on "Click Here to go Student Dashbord"
-    wait.until(EC.element_to_be_clickable((By.LINK_TEXT, "Click Here to go Student Dashbord"))).click()
+            # Step 3: Dashboard link
+            wait.until(EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, "Click Here to go Student Dashbord"))).click()
 
-    # Step 5: Wait for Subject-wise attendance to load
-    wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_PanelSubjectwise")))
+            # Step 4: Wait for Subject Table
+            wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_grdSubject")))
+            table = driver.find_element(By.ID, "ctl00_cpStud_grdSubject")
+            rows = table.find_elements(By.TAG_NAME, "tr")
 
-    # Step 6: Get all 'Classes Held' values
-    classes_held_elements = driver.find_elements(By.XPATH, '//table[@id="ctl00_cpStud_GridSubjectwise"]/tbody/tr/td[6]')
-    classes_held = [el.text for el in classes_held_elements if el.text.strip().isdigit()]
+            total_classes = 0
+            subjects_counted = 0
+            for row in rows[1:]:  # skip header
+                cols = row.find_elements(By.TAG_NAME, "td")
+                if len(cols) >= 4:
+                    held = cols[3].text.strip()
+                    if held.isdigit():
+                        total_classes += int(held)
+                        subjects_counted += 1
 
-    # Debug print
-    print("Classes Held per subject:", classes_held)
+            avg_classes = round(total_classes / subjects_counted, 1) if subjects_counted else "NA"
 
-    # Step 7: Insert into Google Sheet D8:D21
-    update_range = 'D8:D21'
-    values = [[val] for val in classes_held]
-    worksheet.update(update_range, values)
-    print("✅ Successfully inserted classes held into Google Sheet.")
+            # Insert value to correct row
+            cell = sheet.find(roll)
+            sheet.update_cell(cell.row, len(header_row) + 1, avg_classes)
+            driver.quit()
+            return
 
-except Exception as e:
-    print("❌ Error:", e)
+        except Exception as e:
+            print(f"[{roll}] Attempt {attempt} failed: {e}")
+            if attempt == MAX_ATTEMPTS:
+                try:
+                    cell = sheet.find(roll)
+                    sheet.update_cell(cell.row, len(header_row) + 1, "Error")
+                except:
+                    pass
+            if 'driver' in locals():
+                driver.quit()
+            time.sleep(1)
 
-finally:
-    driver.quit()
+
+# Run in parallel
+with ThreadPoolExecutor(max_workers=3) as executor:
+    executor.map(process_roll, rolls)
+
+print("✅ Done inserting class held counts per roll number.")
