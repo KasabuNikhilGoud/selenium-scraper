@@ -110,7 +110,7 @@ client = gspread.authorize(creds)
 
 try:
     # Open sheet by ID
-    sheet = client.open_by_key("1hu2BoArCojZJGHNODGuaHNE3agS4wylbr_MFOeEWiKI").worksheet("Attendence CSE-B(2023-27)")
+    sheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4").worksheet("Attendence CSE-B(2023-27)")
 
     # Ensure list has exactly 14 values (D8:D21)
     while len(classes_held_list) < 14:
