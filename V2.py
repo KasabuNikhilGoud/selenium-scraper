@@ -6,6 +6,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 import time
+import os
 from shutil import which
 
 # Setup Chrome options (temporarily non-headless for debugging)
@@ -17,6 +18,10 @@ chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--log-level=3")
 chrome_options.add_argument("--window-size=1280,800")
 chrome_options.add_argument("--disable-notifications")  # Prevent pop-ups
+
+# Generate a unique user data directory to avoid conflicts
+unique_dir = f"/tmp/chrome-profile-{os.getpid()}-{time.time()}"
+chrome_options.add_argument(f"--user-data-dir={unique_dir}")
 
 # Detect chromium-browser path for compatibility (e.g., GitHub Actions)
 chrome_path = which("chromium-browser")
@@ -117,7 +122,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", sco
 client = gspread.authorize(creds)
 
 try:
-    # Open sheet by ID (updated to new ID)
+    # Open sheet by ID
     sheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4").worksheet("Attendence CSE-B(2023-27)")
     # Ensure list has exactly 14 values (D8:D21)
     while len(classes_held_list) < 14:
