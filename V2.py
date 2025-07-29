@@ -28,7 +28,7 @@ else:
 
 # Initialize WebDriver
 driver = webdriver.Chrome(options=chrome_options)
-wait = WebDriverWait(driver, 25)  # Increased timeout to 25 seconds
+wait = WebDriverWait(driver, 30)  # Increased timeout to 30 seconds
 
 try:
     # Step 1: Open BeeSERP Login Page
@@ -62,15 +62,15 @@ try:
         print(f"⚠️ Failed to locate dashboard link: {e}")
 
     # Step 5: Wait for Subject-wise Attendance Table
+    classes_held_list = []  # Initialize to avoid undefined variable error
+    total_held = 0
     try:
         # Wait for the table to be fully loaded with specific data
         wait.until(EC.visibility_of_element_located((By.XPATH, "//table[@id='ctl00_cpStud_grdSubject']//tr[td[contains(text(), 'DEVOPS')]]")))
-        time.sleep(4)  # Increased delay for dynamic content
+        time.sleep(5)  # Increased delay for dynamic content
         table_div = wait.until(EC.presence_of_element_located((By.ID, "ctl00_cpStud_PanelSubjectwise")))
         rows = table_div.find_elements(By.XPATH, ".//tr")[1:]  # Skip header
 
-        classes_held_list = []
-        total_held = 0
         for i, row in enumerate(rows, 1):
             cells = row.find_elements(By.TAG_NAME, "td")
             if len(cells) >= 6:  # Ensure row has enough columns
@@ -91,13 +91,14 @@ try:
         print(f"✅ Total Classes Held: {total_held}")
         if len(classes_held_list) != 13:
             print(f"⚠️ Warning: Expected 13 rows, got {len(classes_held_list)}")
-
-        # Save page source for debugging
-        with open("page_source.html", "w", encoding="utf-8") as f:
-            f.write(driver.page_source)
-        print("✅ Saved page source to page_source.html")
     except Exception as e:
         print(f"⚠️ Failed to locate or process attendance table: {e}")
+        print("ℹ️ Using default empty list due to table loading failure")
+
+    # Save page source for debugging
+    with open("page_source.html", "w", encoding="utf-8") as f:
+        f.write(driver.page_source)
+    print("✅ Saved page source to page_source.html")
 
 finally:
     driver.quit()
@@ -109,7 +110,7 @@ client = gspread.authorize(creds)
 
 try:
     # Open sheet by ID
-    sheet = client.open_by_key("1Rk3eNqEhbuDIgu3Zx4_CwOZCnFlLm6Vr9obVzYl_zr4").worksheet("Attendence CSE-B(2023-27)")
+    sheet = client.open_by_key("1hu2BoArCojZJGHNODGuaHNE3agS4wylbr_MFOeEWiKI").worksheet("Attendence CSE-B(2023-27)")
 
     # Ensure list has exactly 14 values (D8:D21)
     while len(classes_held_list) < 14:
